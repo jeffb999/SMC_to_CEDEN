@@ -14,7 +14,7 @@
 #      3 tabs in CEDEN template: ToxSummaryResults, ToxReplicateResults, ToxBatch
 #
 # Percent Effect
-# Need to calculate a "Percent Effect" for ToxSummaryResults tab in CEDEN.  This is not done by reporting labs.
+# Need to calculate a "Percent Effect" for ToxSummaryResults tab in CEDEN.  This is not done by the reporting labs, and is not in any of the tables within the SMC database.
 #     In order to calculate effect, need to identify the control sample (mean in summary table or replicates in Result table).
 #     This varies by tox lab & maybe even when the testing was conducted.
 # Methods to get Ctrl.  11 different ways had to be used to find control values.
@@ -47,7 +47,7 @@
 #   Get coordinates for sites needing to be added to CEDEN Station tab
 #
 #
-# Use data from this script to populate CEDEN taxonomy data template.  The 2019 version can be found at:
+# Use data from this script to populate CEDEN taxonomy data template.  The 2019 version of the template can be found at:
 # L:\SMC Regional Monitoring_ES\SMC_RM\Data\Working\CEDEN Upload\Templates\ceden_toxicity_template_01082019_blank.xls
 #
 #
@@ -81,15 +81,32 @@ ToxBatch_query = "select * from sde.unified_toxicitybatch"      # Tox Batch
 tbl_ToxBatch   = tbl(con, sql(ToxBatch_query))
 ToxBatch.1     = as.data.frame(tbl_ToxBatch)
 
+# Get PHab data (select variables) in order to identify samples collected by CSULB.  This will eliminate the need to periodically update a static file.
+# Takes about 1min 15sec to run.  There are items in analysis_phab_metrics that do not appear in unified_phab
+phab_sql <- paste0("SELECT stationcode, sampledate, sampleagencycode FROM sde.unified_phab", sep = "")
+phab_df <- tbl(con, sql(phab_sql)) %>%
+  as_tibble()
+#
+phabm_sql <- paste0("SELECT stationcode, sampledate, sampleagencycode FROM sde.analysis_phab_metrics", sep = "")
+phabm_df <- tbl(con, sql(phabm_sql)) %>%
+  as_tibble()
+
+
+
+
+
+
 ## Static files (will need to be revised each year)
-CSULB <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/CSULB StationCodes_from PHab_092220.csv', stringsAsFactors=F, strip.white=TRUE)
+#CSULB <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/CSULB StationCodes_from PHab_092220.csv', stringsAsFactors=F, strip.white=TRUE)
 #CEDEN.Chem <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/Chem N P_Program SCSMC SMCRWM_091820.csv', stringsAsFactors=F, strip.white=TRUE)
-CEDEN.Tox <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/CEDEN Toxicity_State_downloaded 070621_NoDups.csv', stringsAsFactors=F, strip.white=TRUE)
+CEDEN.Tox <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/CEDEN ToxicityEndpoints_State_NoDups_downloaded 041922.csv', stringsAsFactors=F, strip.white=TRUE)
+# The CEDEN toxicity data were filtered for all toxicity endpoints for the download (e.g., Parameters = Survival, Reproduction, Weight, etc., while chemistry data were not selected)
 # https://ceden.waterboards.ca.gov/AdvancedQueryTool (Here's the link to download toxicity data in 2021.  Who knows what it'll be when you read this.)
 #
 # #CEDEN Look Up Lists.  Read in tables as needed.
 # CEDEN.Agency    <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/AgencyLookUp928202095222.csv', stringsAsFactors=F, strip.white=TRUE)
 # CEDEN.Anlyt     <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/AnalyteLookUp9222020105959.csv', stringsAsFactors=F, strip.white=TRUE)
+  CEDEN.Constit  <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/ConstituentLookUp1052020103237.csv', stringsAsFactors=F, strip.white=TRUE)
 # CEDEN.Fraction  <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/FractionLookUp924202015397.csv', stringsAsFactors=F, strip.white=TRUE)
 # CEDEN.LabSubmit  <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/LabSubmissionLookUp115202075519.csv', stringsAsFactors=F, strip.white=TRUE)
 # CEDEN.Method    <- read.csv('L:/SMC Regional Monitoring_ES/SMC_RM/Data/Working/CEDEN Upload/LULists/MethodLookUp9242020152937.csv', stringsAsFactors=F, strip.white=TRUE)
@@ -122,10 +139,26 @@ AlsoInclude <- c("402SNPMCR", "902ARO100", "903FRC", "905BCC", "907BCT", "911LAP
                  "ME-VR2", "REF-FC", "REF-TCAS", "SJC-74", "TC-DO")
 
 # List of CSULB samples (need to revise each year). Remove all, per email from Rafi 9/22/2020.
-CSULB <- CSULB %>%
-  mutate(sampledate = as.Date(as.character(sampledate), "%m/%d/%Y")) %>%
+# CSULB <- CSULB %>%
+#   mutate(sampledate = as.Date(as.character(sampledate), "%m/%d/%Y")) %>%
+#   left_join(lustations.1[, c("masterid", "stationid")], by=c("stationcode" = "stationid")) %>%
+#   mutate(SiteDate = paste(masterid, sampledate, sep="_")) %>%
+#   filter(!duplicated(SiteDate)) %>%
+#   arrange(SiteDate)
+
+
+# # CSULB sites to remove.  CSULB submits data directly to SWAMP.  SiteDates are removed below, not stationcodes,
+# #  therefore if a site was sampled by CSULB, it won't automatically get removed, unless CSULB is associated with the sample (SiteDate).
+phab_df2 <- rbind(phab_df, phabm_df)
+PosCSULB <- grep("CSULB", phab_df2$sampleagencycode)    # find the index of records that contain "CSULB" in their sampleagencycode
+Dat.CSULB <- phab_df2[PosCSULB, ]                       # use the index to retrieve these data
+Dat.CSULB <- Dat.CSULB %>%
+  mutate(sampledate = as.Date(sampledate)) %>%
   left_join(lustations.1[, c("masterid", "stationid")], by=c("stationcode" = "stationid")) %>%
-  mutate(SiteDate = paste(masterid, sampledate, sep="_"))
+  mutate(SiteDate = paste(masterid, sampledate, sep="_")) %>%
+  filter(!duplicated(SiteDate)) %>%
+  arrange(SiteDate)
+
 
 # List of ToxBatches already in CEDEN
 CEDEN.Tox.2 <- CEDEN.Tox %>%
@@ -144,13 +177,15 @@ GoodToxBatch <- ToxRes.1 %>%
   filter(probabilistic == "true" | stationcode %in% AlsoInclude) %>%  # Retain probabilistic sites + bonus sites
   mutate(sampledate = as.Date(sampledate)) %>%
   mutate(SiteDate = paste(masterid, sampledate, sep="_")) %>%     # Create SiteDate to merge with CSULB samples
-  filter(!(SiteDate %in% CSULB$SiteDate)) %>%                     # Remove CSULB samples
+  filter(!(SiteDate %in% Dat.CSULB$SiteDate)) %>%                 # Remove CSULB samples
   filter(!(toxbatch %in% CEDEN.Tox.2$ToxBatch)) %>%               # Remove toxbatches already in CEDEN
   filter(!(toxbatch %in% MoreCEDEN))                              # Remove toxbatches in CEDEN identified through CEDEN data checker
 
 GoodToxBatch.2 <- GoodToxBatch %>%
   select(toxbatch, latitude, longitude, probabilistic) %>%
   filter(!duplicated(toxbatch))
+
+rm(phab_df, phab_df2, phabm_df)
 
 
 
@@ -267,6 +302,14 @@ ToxBatch.2 <- ToxBatch.1 %>%
 
 #####---  Conform entries to what is expected in CEDEN  ---#####
 
+### Stationcode (ToxRes)
+ToxRes.2 <- ToxRes.2 %>%
+  mutate(stationcode = ifelse(stationcode != "LABQA" & (sampletypecode == "CNEG" | sampletypecode == "CNDL"), "LABQA", stationcode))
+### Stationcode (ToxSum)
+ToxSum.2 <- ToxSum.2 %>%
+  mutate(stationcode = ifelse(stationcode != "LABQA" & (sampletypecode == "CNEG" | sampletypecode == "CNDL"), "LABQA", stationcode))
+# Important to revise these here, since so many checks depend on it
+
 ### Analyte (ToxRes)
 # AnalyteToRevise <- ToxRes.2[!(ToxRes.2$analytename %in% CEDEN.Anlyt$AnalyteName), ]
 # AnalyteToRevise <- AnalyteToRevise[!duplicated(AnalyteToRevise$analytename), ]
@@ -297,9 +340,46 @@ ToxSum.2 <- ToxSum.2 %>%
 
 
 ### Fraction (ToxRes)
+# Two criteria: 1) Does the fraction exist in the fraction lookup list?  2) Is the fraction valid in the constituent lookup list?
+
+# 1. Does the fraction exist in the fraction lookup list?  (Can bypass this and go to step 2)
 # FractionToRevise <- ToxRes.2[!(ToxRes.2$fractionname %in% CEDEN.Fraction$FractionName), ]
 # FractionToRevise <- FractionToRevise[!duplicated(FractionToRevise$fractionname), ]
 # FractionToRevise <- FractionToRevise[order(FractionToRevise$fractionname), ]
+
+# 2. Is the fraction valid in the CEDEN constituent lookup list? (combination of analyte, matrix, fraction, etc)
+# Create 2 lookup lists.
+#   "CEDEN.Constit2" serves as a reference of all valid analyte:matrix:fraction combinations possible in the CEDEN constituent look up,
+#   while "getfraction" serves as a list of items to return, only using one of the valid analyte:matrix combinations to return a fraction.
+CEDEN.Constit2 <- CEDEN.Constit %>%
+  mutate(AnMtxFrc = paste(AnalyteName, MatrixName, FractionName, sep="_"))
+TWQM <- CEDEN.Constit2 %>%
+  filter(MethodName == "ToxWQMeasurement") %>% # this seemed to be most appropriate
+  mutate(AnMtx = paste(AnalyteName, MatrixName, sep="_")) %>%
+  filter(!duplicated(AnMtx)) # the lookup list should only have 1 option to return.  'AnMtx' is the lookup term.
+getfraction <- TWQM$FractionName #create the lookup table, part 1. This has the variable that will be returned.
+names(getfraction) <- TWQM$AnMtx #create the lookup table, part 2. This has the searchable variable.
+
+# Standardize the search terms in the data table to conform with CEDEN constituent lu,
+#  and create the concatenated search terms.  Use the intermediary dataframe "ToxRes.2b".
+#unique(ToxRes.2$wqsource)
+ToxRes.2b <- ToxRes.2 %>%
+  mutate(wqsource = ifelse(wqsource=="Not Applicable" | wqsource=="Not applicable", "not applicable", wqsource)) %>%
+  mutate(wqsource = ifelse(wqsource=="Overlying Water" | wqsource=="overlying water" |
+                             wqsource=="Overlying water", "overlyingwater", wqsource)) %>%
+  mutate(AMF = paste(analytename, wqsource, fractionname, sep="_")) %>% # search term containing the fraction, to see if it is valid
+  mutate(AM = paste(analytename, wqsource, sep="_")) # search term to retrieve a valid fraction from the lookup table
+
+ToxRes.2b <- ToxRes.2b %>% # Retain or retrieve suitable fractionname.  The individual steps have been retained for ease of QA.
+  mutate(Frxn2 = ifelse(AMF %in% CEDEN.Constit2$AnMtxFrc, fractionname, "Go to LU")) %>%
+  mutate(Frxn3 = ifelse(!(AMF %in% CEDEN.Constit2$AnMtxFrc), getfraction[AM], "")) %>%
+  mutate(Frxn4 = ifelse(Frxn2 == "Go to LU", Frxn3, Frxn2))
+#unique(ToxRes.2b$Frxn4)
+
+ToxRes.2 <- ToxRes.2 %>%
+  mutate(fractionname = ToxRes.2b$Frxn4)
+
+rm(CEDEN.Constit2, ToxRes.2b, TWQM, getfraction)
 
 
 ### Fraction (ToxSum)
@@ -337,10 +417,17 @@ ToxSum.2 <- ToxSum.2 %>%
 # MatrixToRevise <- MatrixToRevise[!duplicated(MatrixToRevise$matrixname), ]
 # MatrixToRevise <- MatrixToRevise[order(MatrixToRevise$matrixname), ]
 #
-ToxRes.2$matrixname <- ifelse(ToxRes.2$matrixname == "Samplewater" | ToxRes.2$matrixname == "SampleWater",
-                                  "samplewater", ToxRes.2$matrixname)
-ToxRes.2$matrixname <- ifelse(ToxRes.2$matrixname == "Blankwater", "blankwater", ToxRes.2$matrixname)
-ToxRes.2$matrixname <- ifelse(ToxRes.2$matrixname == "Labwater", "labwater", ToxRes.2$matrixname)
+ToxRes.2 <- ToxRes.2 %>%
+  mutate(matrixname = ifelse(matrixname == "Samplewater" | matrixname == "SampleWater", "samplewater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "Blankwater", "blankwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "Labwater", "labwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "blankwater" & sampletypecode == "CNEG" & stationcode != "LABQA", "labwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "blankmatrix" & sampletypecode == "CNEG" & stationcode != "LABQA", "sediment", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "Overlying water" | matrixname == "Overlying Water" | matrixname == "overlying water" |
+                               matrixname == "overlyingwater", "samplewater", matrixname)) # 'overlyingwater' is a valid name in
+                              # the CEDEN Matrix LookUp, but the checker gets the error: "Incorrect MatrixName for field samples".
+                              # There is no indication in these records that they are field samples.  Try changing to samplewater to match
+                              # other toxicity test water quality measurements.  No need to alter the wqsource field if it's overlyingwater.
 
 
 ### Matrix (ToxSum)
@@ -348,10 +435,12 @@ ToxRes.2$matrixname <- ifelse(ToxRes.2$matrixname == "Labwater", "labwater", Tox
 # MatrixToRevise.Sum <- MatrixToRevise.Sum[!duplicated(MatrixToRevise.Sum$matrixname), ]
 # MatrixToRevise.Sum <- MatrixToRevise.Sum[order(MatrixToRevise.Sum$matrixname), ]
 #
-ToxSum.2$matrixname <- ifelse(ToxSum.2$matrixname == "Samplewater" | ToxSum.2$matrixname == "SampleWater",
-                              "samplewater", ToxSum.2$matrixname)
-ToxSum.2$matrixname <- ifelse(ToxSum.2$matrixname == "Blankwater", "blankwater", ToxSum.2$matrixname)
-ToxSum.2$matrixname <- ifelse(ToxSum.2$matrixname == "Labwater", "labwater", ToxSum.2$matrixname)
+ToxSum.2 <- ToxSum.2 %>%
+  mutate(matrixname = ifelse(matrixname == "Samplewater" | matrixname == "SampleWater", "samplewater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "Blankwater", "blankwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "Labwater", "labwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "blankwater" & sampletypecode == "CNEG", "labwater", matrixname)) %>%
+  mutate(matrixname = ifelse(matrixname == "blankmatrix" & sampletypecode == "CNEG", "sediment", matrixname))
 
 
 ### Method (ToxRes)
@@ -511,8 +600,30 @@ ToxSum.2$testduration <- ifelse(ToxSum.2$testduration == "7 Days", "7 days", Tox
 
 
 ### ToxPointMethod (ToxRes)
+wqsourceover <- data.frame(wqsource=c("overlyingwater", "overlying water", "Overlying water", "Overlying Water", "OverlyingWater",
+                                      "not applicable", "Not Applicable", "Not applicable"))
+# "not recorded" is also valid for some analytes, according to Constituent look up file.  
+wqanalyte <- data.frame(analytename=c("Alkalinity as CaCO3", "Ammonia as N", "Ammonia as NH3", "Ammonia as NH3, Unionized",
+                                      "Chlorine, Free", "Chlorine, Total Residual", "ElectricalConductivity", "Hardness as CaCO3",
+                                      "Hydrogen Sulfide", "Nitrate as N", "Nitrate as NO3", "Nitrite as N", "Oxygen, Dissolved",
+                                      "pH", "Salinity", "SpecificConductivity", "Sulfide, Total", "Temperature", "Turbidity"))
 ToxRes.2 <- ToxRes.2 %>%
-  mutate(toxpointmethod = ifelse(toxpointmethod == "Probe" | toxpointmethod == "probe", "ToxWQMeasurement", toxpointmethod))
+  mutate(toxpointmethod = ifelse(toxpointmethod == "Probe" | toxpointmethod == "probe", "ToxWQMeasurement", toxpointmethod)) %>%
+  mutate(toxpointmethod = ifelse(wqsource %in% wqsourceover$wqsource & analytename %in% wqanalyte$analytename,
+                                 "ToxWQMeasurement", toxpointmethod)) %>%
+  mutate(toxpointmethod = ifelse(analytename == "Reproduction" | "Young/female" | "Biomass (wt/orig indiv)", "None", toxpointmethod)) %>%
+  mutate(toxpointmethod = ifelse(analytename == "Survival" & (wqsource == "not applicable" | wqsource == "Not Applicable"
+                                                              | wqsource == "Not applicable"), "None", toxpointmethod))
+rm(wqsourceover, wqanalyte)
+
+
+
+
+### ToxPointMethod (ToxSum)
+ToxSum.2 <- ToxSum.2 %>%
+  mutate(toxpointmethod = ifelse(analytename == "Reproduction", "None", toxpointmethod)) %>%
+  mutate(toxpointmethod = ifelse(analytename == "Survival" & (wqsource=="not applicable" | wqsource=="Not Applicable" |
+                                                                wqsource=="Not applicable"), "None", toxpointmethod))
 
 
 ### Unit (ToxRes)
@@ -520,10 +631,25 @@ ToxRes.2 <- ToxRes.2 %>%
 # UnitToRevise <- UnitToRevise[!duplicated(UnitToRevise$unitanalytename), ]
 # UnitToRevise <- UnitToRevise[order(UnitToRevise$unitanalytename), ]
 #
-ToxRes.2$unitanalytename <- ifelse(ToxRes.2$unitanalytename == "C", "Deg C", ToxRes.2$unitanalytename)
-ToxRes.2$unitanalytename <- ifelse(ToxRes.2$unitanalytename == "MG/L", "mg/L", ToxRes.2$unitanalytename)
-ToxRes.2$unitanalytename <- ifelse(ToxRes.2$unitanalytename == "None", "none", ToxRes.2$unitanalytename)
-ToxRes.2$unitanalytename <- ifelse(ToxRes.2$unitanalytename == "Num/rep", "Num/Rep", ToxRes.2$unitanalytename)
+ToxRes.2 <- ToxRes.2 %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "C", "Deg C", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "degrees", "Deg C", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "MG/L", "mg/L", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "None", "none", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "Num/rep", "Num/Rep", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "SpecificConductivity", "uS/cm", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "Young/female" , "Num/Rep", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "pH" , "none", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "Survival" , "%", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "ElectricalConductivity" &
+                                    (wqsource == "overlyingwater" | wqsource == "overlying water" | wqsource == "Overlying water" |
+                                       wqsource == "Overlying Water"), "umhos/cm", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "ElectricalConductivity" &
+                                    (wqsource == "Not applicable" | wqsource == "Not Applicable" | wqsource == "not applicable" |
+                                       wqsource == "not recorded" | wqsource == "Not Recorded" | wqsource == "Not recorded"),
+                                     "uS/cm", unitanalytename))
+  
+  
 
 
 ### Unit (ToxSum)
@@ -531,10 +657,15 @@ ToxRes.2$unitanalytename <- ifelse(ToxRes.2$unitanalytename == "Num/rep", "Num/R
 # UnitToRevise.Sum <- UnitToRevise.Sum[!duplicated(UnitToRevise.Sum$unitanalytename), ]
 # UnitToRevise.Sum <- UnitToRevise.Sum[order(UnitToRevise.Sum$unitanalytename), ]
 #
-ToxSum.2$unitanalytename <- ifelse(ToxSum.2$unitanalytename == "C", "Deg C", ToxSum.2$unitanalytename)
-ToxSum.2$unitanalytename <- ifelse(ToxSum.2$unitanalytename == "MG/L", "mg/L", ToxSum.2$unitanalytename)
-ToxSum.2$unitanalytename <- ifelse(ToxSum.2$unitanalytename == "None", "none", ToxSum.2$unitanalytename)
-ToxSum.2$unitanalytename <- ifelse(ToxSum.2$unitanalytename == "Num/rep", "Num/Rep", ToxSum.2$unitanalytename)
+ToxSum.2 <- ToxSum.2 %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "C", "Deg C", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "MG/L", "mg/L", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "None", "none", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(unitanalytename == "Num/rep", "Num/Rep", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "SpecificConductivity", "uS/cm", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "Young/female" , "Num/Rep", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "pH" , "none", unitanalytename)) %>%
+  mutate(unitanalytename = ifelse(analytename == "Survival" , "%", unitanalytename))
 
 
 ### WQSource (ToxRes)
@@ -614,6 +745,8 @@ PE.Sum <- PE.Sum[order(PE.Sum$ID3, PE.Sum$stationcode), ]
 # 8. stationcode = LABQA, sampletypecode = CNEG, matrix=labwater
 # 9. stationcode = LABQA, sampletypecode = CNEG, matrix=samplewater
 # 10. Results table, sampletypecode = CNEG, matrix = labwater (need to calculate a mean Ctrl from lab replicates) (e.g., toxbatch = 0906-S071)
+# 11. sampletypecode = CNDL, matrix = referencetoxicant, concentration = 0 or -88 (Same as Method 7, but now extend the use of the reference control to matrix=samplewater)
+
 
 # # Any reference toxicant QA for LABQA, CNEG, blankwater?
 # QA.blankwater <- PE.Sum[PE.Sum$stationcode=="LABQA" & PE.Sum$sampletypecode=="CNEG" & PE.Sum$matrixname == "blankwater", ]
@@ -1157,11 +1290,13 @@ ToxBatch.3 <- ToxBatch.2 %>%
 
 
 #####--- Locations tab prep  ---#####
-#Get actual latitude, longitude and AgencyCode) from PHab
-PHab_query = "select * from sde.unified_phab"                   # Took over half an hour 5/28/2021 8:02-8:38
-tbl_PHab   = tbl(con, sql(PHab_query))
-PHab.1     = as.data.frame(tbl_PHab)
-rm(PHab_query)
+#Get actual latitude, longitude and AgencyCode from PHab
+# Takes about 2 minutes
+phabLoc_sql <- paste0("SELECT stationcode, sampledate, sampleagencycode, sampleagencyname,
+                   actual_latitude, actual_longitude, targetlatitude, targetlongitude, datum FROM sde.unified_phab", sep = "")
+PHab.1 <- tbl(con, sql(phabLoc_sql)) %>%
+  as_tibble()
+rm(phabLoc_sql)
 
 require(lubridate)
 
